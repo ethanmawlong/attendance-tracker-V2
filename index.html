@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modern Attendance Tracker</title>
+    <!-- Load Tailwind CSS --><script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Inter font --><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Custom styles for the calendar */
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, minmax(0, 1fr));
+        }
+        .day-cell {
+            min-height: 100px;
+            transition: background-color 0.15s ease-in-out, transform 0.1s ease-in-out;
+        }
+        .day-cell:hover {
+            transform: translateY(-2px); /* Slight lift on hover */
+        }
+        /* Transition for modal */
+        #attendance-modal {
+            transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+        }
+        .status-dot {
+            width: 10px; /* Slightly larger */
+            height: 10px; /* Slightly larger */
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 4px;
+            box-shadow: 0 0 2px rgba(0,0,0,0.2); /* Subtle shadow for depth */
+        }
+        .animate-pulse-once {
+            animation: pulse-once 0.5s ease-out forwards;
+        }
+        @keyframes pulse-once {
+            0% { transform: scale(0.95); opacity: 0.7; }
+            50% { transform: scale(1.05); opacity: 1; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-900 antialiased">
+
+    <!-- Main Container --><div class="container mx-auto max-w-7xl p-6 md:p-8 lg:p-10">
+        <h1 class="text-4xl font-extrabold text-indigo-700 mb-8 tracking-tight">Class Attendance Dashboard</h1>
+
+        <!-- Main App Content --><div id="app-container">
+            
+            <!-- Message Bar --><div id="message-bar" class="p-4 rounded-lg mb-6 text-center font-medium animate-pulse-once hidden"></div>
+
+            <!-- Layout: Control Panel & Calendar --><div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+
+                <!-- Left Column: Controls & Subjects --><div class="md:col-span-1 flex flex-col gap-8">
+                    
+                    <!-- Add Subject Card --><div class="bg-white p-6 rounded-xl shadow-lg">
+                        <h2 class="text-2xl font-semibold text-gray-800 mb-4">Add New Subject</h2>
+                        <form id="add-subject-form">
+                            <label for="subject-name" class="block text-sm font-medium text-gray-700 mb-2">Subject Name</label>
+                            <div class="mt-1 flex gap-3">
+                                <input type="text" id="subject-name" class="flex-grow block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-base p-2" placeholder="e.g., Data Structures" required>
+                                <button type="submit" class="inline-flex items-center justify-center rounded-lg border border-transparent bg-indigo-600 py-2 px-5 text-base font-medium text-white shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150">
+                                    Add
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Data Management Card (NEW) --><div class="bg-white p-6 rounded-xl shadow-lg">
+                        <h2 class="text-2xl font-semibold text-gray-800 mb-4">Data Management</h2>
+                        <div class="space-y-4">
+                            <button id="export-csv-btn" class="w-full inline-flex items-center justify-center rounded-lg border border-transparent bg-green-600 py-2.5 px-5 text-base font-medium text-white shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition ease-in-out duration-150">
+                                Export to CSV
+                            </button>
+                            <div>
+                                <label for="import-csv-input" class="block text-sm font-medium text-gray-700 mb-2">Import from CSV</label>
+                                <input type="file" id="import-csv-input" accept=".csv" class="block w-full text-sm text-gray-500
+                                  file:mr-4 file:py-2 file:px-4
+                                  file:rounded-lg file:border-0
+                                  file:text-sm file:font-semibold
+                                  file:bg-indigo-50 file:text-indigo-700
+                                  hover:file:bg-indigo-100
+                                "/>
+                                <button id="import-csv-btn" class="w-full mt-2 inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white py-2.5 px-5 text-base font-medium text-gray-700 shadow-sm hover:bg-gray-100 transition ease-in-out duration-150">
+                                    Import and Overwrite
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Subjects List Card --><div class="bg-white p-6 rounded-xl shadow-lg flex-grow">
+                        <h2 class="text-2xl font-semibold text-gray-800 mb-4">My Subjects</h2>
+                        <div id="subject-list" class="space-y-4">
+                            <!-- Subjects will be dynamically inserted here --><p class="text-gray-500 text-center py-4">No subjects added yet. Start by adding one!</p>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Right Column: Calendar --><div class="md:col-span-2 bg-white p-6 rounded-xl shadow-lg">
+                    <!-- Calendar Header --><div class="flex items-center justify-between mb-6">
+                        <button id="prev-month" class="p-2 rounded-full text-gray-600 hover:bg-gray-100 hover:text-indigo-700 transition ease-in-out duration-150">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                        </button>
+                        <h2 id="month-year" class="text-2xl font-bold text-gray-800"></h2>
+                        <button id="next-month" class="p-2 rounded-full text-gray-600 hover:bg-gray-100 hover:text-indigo-700 transition ease-in-out duration-150">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                        </button>
+                    </div>
+                    <!-- Calendar Grid --><div id="calendar-grid-container" class="calendar-grid border border-gray-200 rounded-lg overflow-hidden">
+                        <!-- Day Headers --><div class="text-center font-bold p-3 border-r border-b border-gray-200 bg-gray-100 text-sm text-gray-700">Sun</div>
+                        <div class="text-center font-bold p-3 border-r border-b border-gray-200 bg-gray-100 text-sm text-gray-700">Mon</div>
+                        <div class="text-center font-bold p-3 border-r border-b border-gray-200 bg-gray-100 text-sm text-gray-700">Tue</div>
+                        <div class="text-center font-bold p-3 border-r border-b border-gray-200 bg-gray-100 text-sm text-gray-700">Wed</div>
+                        <div class="text-center font-bold p-3 border-r border-b border-gray-200 bg-gray-100 text-sm text-gray-700">Thu</div>
+                        <div class="text-center font-bold p-3 border-r border-b border-gray-200 bg-gray-100 text-sm text-gray-700">Fri</div>
+                        <div class="text-center font-bold p-3 border-r border-b border-gray-200 bg-gray-100 text-sm text-gray-700">Sat</div>
+                        
+                        <!-- Day Cells will be dynamically inserted here --></div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Attendance Modal --><div id="attendance-modal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 opacity-0 invisible" style="z-index: 50;">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md scale-95 transition-all duration-300 ease-out">
+            <!-- Modal Header --><div class="flex justify-between items-center p-5 border-b border-gray-200 bg-indigo-50 rounded-t-xl">
+                <h3 class="text-xl font-bold text-indigo-800" id="modal-title">Mark Attendance</h3>
+                <button id="close-modal-btn" class="text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-100 transition ease-in-out duration-150">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <!-- Modal Body --><div id="modal-body" class="p-6 max-h-96 overflow-y-auto space-y-4">
+                <!-- Subject attendance controls will be injected here --></div>
+            <!-- Modal Footer --><div class="p-5 bg-gray-50 rounded-b-xl text-right border-t border-gray-200">
+                <button id="close-modal-btn-footer" class="inline-flex justify-center rounded-lg border border-gray-300 bg-white py-2 px-5 text-base font-medium text-gray-700 shadow-sm hover:bg-gray-100 transition ease-in-out duration-150">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- LOCAL SCRIPT --><script type="module">
+        // --- Global State & Config ---
+        let currentDate = new Date(); // For calendar navigation
+        let subjects = []; // Local cache: [{ id, name, displayName, stats: {} }]
+        let attendanceRecords = {}; // Local cache: {"YYYY-MM-DD": {"subjectId": "status"}}
+
+        // DOM Elements
+        const appContainer = document.getElementById('app-container');
+        const messageBar = document.getElementById('message-bar');
+        const addSubjectForm = document.getElementById('add-subject-form');
+        const subjectNameInput = document.getElementById('subject-name');
+        const subjectListContainer = document.getElementById('subject-list');
+        const prevMonthBtn = document.getElementById('prev-month');
+        const nextMonthBtn = document.getElementById('next-month');
+        const monthYearEl = document.getElementById('month-year');
+        const calendarGridContainer = document.getElementById('calendar-grid-container');
+        const modal = document.getElementById('attendance-modal');
+        const modalTitle = document.getElementById('modal-title');
+        const modalBody = document.getElementById('modal-body');
+        const closeModalBtn = document.getElementById('close-modal-btn');
+        const closeModalBtnFooter = document.getElementById('close-modal-btn-footer');
+        const exportCsvBtn = document.getElementById('export-csv-btn');
+        const importCsvInput = document.getElementById('import-csv-input');
+        const importCsvBtn = document.getElementById('import-csv-btn');
+
+        // --- Local Storage Functions ---
+
+        function loadDataFromLocalStorage() {
+            console.log("Loading data from localStorage...");
+            try {
+                const storedSubjects = localStorage.getItem('attendance_subjects');
+                const storedRecords = localStorage.getItem('attendance_records');
+                
+                subjects = storedSubjects ? JSON.parse(storedSubjects) : [];
+                attendanceRecords = storedRecords ? JSON.parse(storedRecords) : {};
+                
+                // Ensure subjects have stats property
+                subjects.forEach(s => s.stats = {});
+                
+                console.log(`Loaded ${subjects.length} subjects and ${Object.keys(attendanceRecords).length} date records.`);
+            } catch (error) {
+                console.error("Error loading from localStorage:", error);
+                showMessage("Error loading data. Data may be corrupt.", "error");
+                subjects = [];
+                attendanceRecords = {};
+            }
+        }
+
+        function saveDataToLocalStorage() {
+            try {
+                // Only save the core subject data, not the calculated stats
+                const subjectsToSave = subjects.map(s => ({
+                    id: s.id,
+                    name: s.name,
+                    displayName: s.displayName
+                }));
+                
+                localStorage.setItem('attendance_subjects', JSON.stringify(subjectsToSave));
+                localStorage.setItem('attendance_records', JSON.stringify(attendanceRecords));
+                console.log("Data saved to localStorage.");
+            } catch (error) {
+                console.error("Error saving to localStorage:", error);
+                showMessage("Error saving data. Changes may not persist.", "error");
+            }
+        }
+
+        // --- App Initialization ---
+
+        function initializeLocalApp() {
+            console.log("Initializing local app...");
+            registerEventListeners();
+            loadDataFromLocalStorage();
+            processDataAndRender();
+        }
+        
+        // --- Data Processing & Rendering ---
+
+        function processDataAndRender() {
+            calculateAllStats();
+            renderSubjects();
+            renderCalendar(); // Re-render calendar to show new status dots
+        }
+
+        function calculateAllStats() {
+            for (const subject of subjects) {
+                let present = 0;
+                let absent = 0;
+
+                // Iterate over all dates in attendanceRecords
+                for (const date in attendanceRecords) {
+                    const dayRecords = attendanceRecords[date];
+                    // Check if this subject has a record for this date
+                    const status = dayRecords[subject.id];
+                    if (status === 'present') {
+                        present++;
+                    } else if (status === 'absent') {
+                        absent++;
+                    }
+                    // 'canceled' status is ignored in calculation
+                }
+
+                const totalClasses = present + absent;
+                const percentage = (totalClasses === 0) ? 0 : (present / totalClasses) * 100;
+                let classesNeeded = 0;
+
+                if (percentage < 75 && totalClasses > 0) {
+                    // Formula: x >= 3A - P
+                    const needed = (3 * absent) - present;
+                    classesNeeded = Math.ceil(Math.max(0, needed));
+                }
+                
+                subject.stats = { present, absent, totalClasses, percentage, classesNeeded };
+            }
+        }
+
+        function renderSubjects() {
+            if (subjects.length === 0) {
+                subjectListContainer.innerHTML = `<p class="text-gray-500 text-center py-4">No subjects added yet. Start by adding one!</p>`;
+                return;
+            }
+
+            // Sort subjects by name
+            const sortedSubjects = [...subjects].sort((a, b) => a.displayName.localeCompare(b.displayName));
+
+            subjectListContainer.innerHTML = sortedSubjects.map(subject => {
+                const { displayName, stats } = subject;
+                const percent = stats.percentage.toFixed(1);
+                const isLow = stats.percentage < 75 && stats.totalClasses > 0;
+
+                return `
+                <div class="bg-white border border-gray-200 p-4 rounded-lg shadow-sm flex justify-between items-center transition ease-in-out duration-150 hover:shadow-md">
+                    <div>
+                        <h4 class="font-semibold text-lg text-gray-800">${displayName}</h4>
+                        <p class="text-sm ${isLow ? 'text-red-600 font-semibold' : 'text-gray-600'} mt-1">
+                            <strong>${percent}%</strong> 
+                            <span class="text-xs text-gray-500">(${stats.present} / ${stats.totalClasses} classes)</span>
+                        </p>
+                        ${stats.classesNeeded > 0 ? `
+                        <p class="text-sm text-yellow-800 bg-yellow-50 px-3 py-1 rounded-md mt-2 border border-yellow-200">
+                            You need to attend <strong>${stats.classesNeeded}</strong> more class(es) to reach 75%.
+                        </p>
+                        ` : ''}
+                    </div>
+                    <button class="delete-subject-btn text-gray-400 hover:text-red-600 p-2 rounded-full hover:bg-red-50 transition ease-in-out duration-150" data-id="${subject.id}" data-name="${displayName}" title="Delete Subject">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1H9a1 1 0 00-1 1v3H5l-1 1v2h22v-2l-1-1h-4zM9 4V3h6v1H9z"></path></svg>
+                    </button>
+                </div>
+                `;
+            }).join('');
+        }
+
+        function renderCalendar() {
+            const month = currentDate.getMonth();
+            const year = currentDate.getFullYear();
+
+            monthYearEl.textContent = `${currentDate.toLocaleString('default', { month: 'long' })} ${year}`;
+
+            const firstDay = new Date(year, month, 1).getDay();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+            // Clear only the day and blank cells, not the headers
+            const existingDayCells = calendarGridContainer.querySelectorAll('.day-cell, .blank-cell');
+            existingDayCells.forEach(cell => cell.remove());
+
+            // 1. Add blank cells for padding
+            for (let i = 0; i < firstDay; i++) {
+                calendarGridContainer.insertAdjacentHTML('beforeend', `<div class="blank-cell border-r border-b border-gray-200 bg-gray-50" style="min-height: 100px;"></div>`);
+            }
+
+            // 2. Add day cells
+            for (let day = 1; day <= daysInMonth; day++) {
+                const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                const dayRecords = attendanceRecords[dateString] || {};
+                
+                const statusDotsHtml = Object.keys(dayRecords).map(subjectId => {
+                    const status = dayRecords[subjectId];
+                    const subject = subjects.find(s => s.id === subjectId); // Find subject for title
+                    const subjectName = subject ? subject.displayName : 'Unknown Subject';
+                    let color = 'bg-gray-400'; // canceled
+                    if (status === 'present') color = 'bg-green-500';
+                    if (status === 'absent') color = 'bg-red-500';
+                    return `<span class="status-dot ${color}" title="${subjectName}: ${status}"></span>`;
+                }).join('');
+
+                const cellHtml = `
+                    <div class="day-cell border-r border-b border-gray-200 p-3 cursor-pointer hover:bg-indigo-50 relative" data-date="${dateString}">
+                        <span class="text-md font-medium text-gray-700">${day}</span>
+                        <div class="absolute bottom-2 left-2 flex flex-wrap gap-1">
+                            ${statusDotsHtml}
+                        </div>
+                    </div>
+                `;
+                calendarGridContainer.insertAdjacentHTML('beforeend', cellHtml);
+            }
+        }
+        
+        // --- Event Handlers ---
+
+        function handleAddSubject(e) {
+            e.preventDefault();
+            const rawName = subjectNameInput.value;
+            const displayName = rawName.trim(); // Trim spaces for display
+            
+            // Also normalize for duplicate checking (lowercase)
+            const normalizedName = displayName.toLowerCase();
+
+            if (!displayName) {
+                showMessage("Subject name cannot be empty.", "error");
+                return;
+            }
+
+            // Check for duplicates in our local cache
+            const isDuplicate = subjects.some(s => s.name === normalizedName);
+            if (isDuplicate) {
+                showMessage(`Subject "${displayName}" already exists.`, "error");
+                return;
+            }
+
+            try {
+                // If no duplicates, add the new subject
+                const newSubject = {
+                    id: crypto.randomUUID(), // Generate a unique local ID
+                    name: normalizedName,
+                    displayName: displayName
+                };
+                subjects.push(newSubject);
+                
+                saveDataToLocalStorage();
+                processDataAndRender(); // Re-render everything
+
+                showMessage(`Subject "${displayName}" added successfully!`, "success");
+                subjectNameInput.value = '';
+            } catch (error) {
+                console.error("Error adding subject:", error);
+                showMessage(`Error: ${error.message}`, 'error');
+            }
+        }
+
+        function handleDeleteSubject(subjectId, subjectName) {
+            // Confirmation is handled by the event listener
+            showMessage(`Deleting "${subjectName}"... This will also remove all its attendance records.`, "warning");
+
+            try {
+                // 1. Delete the subject from the array
+                subjects = subjects.filter(s => s.id !== subjectId);
+
+                // 2. Find and delete all related attendance records
+                for (const date in attendanceRecords) {
+                    if (attendanceRecords[date][subjectId]) {
+                        delete attendanceRecords[date][subjectId];
+                        // If the date now has no records, delete the date entry
+                        if (Object.keys(attendanceRecords[date]).length === 0) {
+                            delete attendanceRecords[date];
+                        }
+                    }
+                }
+                
+                saveDataToLocalStorage();
+                processDataAndRender(); // Re-render everything
+                
+                showMessage(`Subject "${subjectName}" and all its records have been deleted.`, "success");
+            } catch (error) {
+                console.error("Error deleting subject:", error);
+                showMessage(`Error: ${error.message}`, 'error');
+            }
+        }
+
+        function handleDayClick(dateString) {
+            if (subjects.length === 0) {
+                showMessage("Please add a subject first before marking attendance.", "warning");
+                return;
+            }
+            
+            // Format date for display
+            const [year, month, day] = dateString.split('-').map(Number);
+            const displayDate = new Date(year, month - 1, day).toLocaleDateString('en-US', {
+                weekday: 'long',
+                month: 'long',
+                day: 'numeric',
+                year: 'numeric'
+            });
+
+            modalTitle.textContent = `Attendance for ${displayDate}`;
+            modal.dataset.date = dateString; // Store date on the modal
+            
+            const dayRecords = attendanceRecords[dateString] || {};
+            
+            // Sort subjects by name for the modal
+            const sortedSubjects = [...subjects].sort((a, b) => a.displayName.localeCompare(b.displayName));
+            
+            modalBody.innerHTML = sortedSubjects.map(subject => {
+                const currentStatus = dayRecords[subject.id] || 'none';
+                
+                const getBtnClass = (status) => {
+                    return currentStatus === status 
+                        ? 'bg-indigo-600 text-white shadow-md' 
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200';
+                };
+
+                return `
+                <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 transition ease-in-out duration-150">
+                    <h5 class="font-semibold text-gray-800 mb-3">${subject.displayName}</h5>
+                    <div class="flex flex-wrap gap-2">
+                        <button class="flex-1 attendance-btn rounded-md px-4 py-2 text-sm font-medium ${getBtnClass('present')} transition ease-in-out duration-150" data-subject-id="${subject.id}" data-status="present">
+                            Present
+                        </button>
+                        <button class="flex-1 attendance-btn rounded-md px-4 py-2 text-sm font-medium ${getBtnClass('absent')} transition ease-in-out duration-150" data-subject-id="${subject.id}" data-status="absent">
+                            Absent
+                        </button>
+                        <button class="flex-1 attendance-btn rounded-md px-4 py-2 text-sm font-medium ${getBtnClass('canceled')} transition ease-in-out duration-150" data-subject-id="${subject.id}" data-status="canceled">
+                            Canceled
+                        </button>
+                        <button class="flex-shrink attendance-btn rounded-md px-4 py-2 text-sm font-medium ${getBtnClass('clear')} border border-gray-300 hover:bg-gray-200 transition ease-in-out duration-150" data-subject-id="${subject.id}" data-status="clear">
+                            Clear
+                        </button>
+                    </div>
+                </div>
+                `;
+            }).join('');
+
+            showModal();
+        }
+
+        function handleSetAttendance(subjectId, status, dateString) {
+            try {
+                // Ensure the date entry exists
+                if (!attendanceRecords[dateString]) {
+                    attendanceRecords[dateString] = {};
+                }
+
+                if (status === 'clear') {
+                    // Delete the record
+                    delete attendanceRecords[dateString][subjectId];
+                    // If the date now has no records, delete the date entry
+                    if (Object.keys(attendanceRecords[dateString]).length === 0) {
+                        delete attendanceRecords[dateString];
+                    }
+                } else {
+                    // Add or update the record
+                    attendanceRecords[dateString][subjectId] = status;
+                }
+                
+                saveDataToLocalStorage();
+                // We only need to re-render stats and calendar, not the whole modal
+                calculateAllStats();
+                renderSubjects();
+                renderCalendar();
+                
+                // Update the modal buttons visually for instant feedback
+                const subjectButtons = modalBody.querySelectorAll(`.attendance-btn[data-subject-id="${subjectId}"]`);
+                subjectButtons.forEach(btn => {
+                    const btnStatus = btn.dataset.status;
+                    if (btnStatus === status) {
+                        btn.classList.add('bg-indigo-600', 'text-white', 'shadow-md');
+                        btn.classList.remove('bg-gray-100', 'text-gray-700', 'hover:bg-gray-200');
+                    } else {
+                        btn.classList.remove('bg-indigo-600', 'text-white', 'shadow-md');
+                        if (btnStatus !== 'clear') { // Clear button has different default styling
+                            btn.classList.add('bg-gray-100', 'text-gray-700', 'hover:bg-gray-200');
+                        }
+                    }
+                });
+
+            } catch (error) {
+                console.error("Error setting attendance:", error);
+                showMessage(`Error: ${error.message}`, 'error');
+            }
+        }
+        
+        // --- CSV Import/Export Handlers ---
+
+        function handleExportCSV() {
+            if (subjects.length === 0) {
+                showMessage("Nothing to export. Add some subjects first.", "warning");
+                return;
+            }
+
+            // Sort subjects by name for consistent column order
+            const sortedSubjects = [...subjects].sort((a, b) => a.displayName.localeCompare(b.displayName));
+            const subjectNames = sortedSubjects.map(s => s.displayName);
+            
+            // Create header row as you requested
+            const header = ["date", ...subjectNames].join(",");
+
+            // Get all unique dates and sort them
+            const allDates = Object.keys(attendanceRecords).sort();
+            
+            const rows = [header];
+
+            // Create data rows
+            for (const date of allDates) {
+                const row = [date];
+                for (const subject of sortedSubjects) {
+                    const status = attendanceRecords[date][subject.id] || ""; // Get status or empty string
+                    // Escape commas in status, just in case (though we don't have them)
+                    row.push(`"${status}"`);
+                }
+                rows.push(row.join(","));
+            }
+
+            const csvContent = rows.join("\n");
+            
+            // Trigger download
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", "attendance_export.csv");
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            showMessage("Export successful!", "success");
+        }
+
+        function handleImportCSV() {
+            const file = importCsvInput.files[0];
+            if (!file) {
+                showMessage("Please select a CSV file to import.", "warning");
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const csvText = e.target.result;
+                try {
+                    const lines = csvText.trim().split("\n");
+                    if (lines.length < 1) throw new Error("File is empty.");
+
+                    const headerLine = lines[0].trim();
+                    const dataLines = lines.slice(1);
+
+                    // Parse header for subject names
+                    const headerSubjects = headerLine.split(",").slice(1).map(name => name.trim().replace(/"/g, '')); // Remove "date" and trim
+                    
+                    if (headerSubjects.length === 0) throw new Error("No subjects found in CSV header.");
+
+                    // Create new subject list
+                    const newSubjects = headerSubjects.map(displayName => ({
+                        id: crypto.randomUUID(),
+                        name: displayName.toLowerCase(),
+                        displayName: displayName
+                    }));
+
+                    // Parse data rows
+                    const newRecords = {};
+                    for (const line of dataLines) {
+                        const values = line.split(",").map(val => val.trim().replace(/"/g, ''));
+                        const date = values[0];
+                        if (!date) continue; // Skip empty lines
+
+                        const statuses = values.slice(1);
+                        newRecords[date] = {};
+
+                        for (let i = 0; i < statuses.length; i++) {
+                            if (i < newSubjects.length) { // Ensure we don't go out of bounds
+                                const subjectId = newSubjects[i].id;
+                                const status = statuses[i];
+                                if (status) { // Only store non-empty statuses
+                                    newRecords[date][subjectId] = status;
+                                }
+                            }
+                        }
+                    }
+
+                    // Overwrite local data
+                    subjects = newSubjects;
+                    attendanceRecords = newRecords;
+                    
+                    saveDataToLocalStorage();
+                    processDataAndRender();
+                    
+                    showMessage(`Import successful! ${subjects.length} subjects and ${Object.keys(attendanceRecords).length} date records loaded.`, "success");
+                    importCsvInput.value = ""; // Clear the file input
+
+                } catch (error) {
+                    console.error("Error parsing CSV:", error);
+                    showMessage(`Import Error: ${error.message}`, "error");
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        // --- UI Helpers (Modal, Messages) ---
+
+        function showModal() {
+            modal.classList.remove('opacity-0', 'invisible');
+            modal.querySelector('.bg-white').classList.remove('scale-95'); // Reset scale for animation
+            modal.querySelector('.bg-white').classList.add('scale-100');
+        }
+
+        function hideModal() {
+            modal.querySelector('.bg-white').classList.remove('scale-100');
+            modal.querySelector('.bg-white').classList.add('scale-95'); // Animate out
+            modal.classList.add('opacity-0', 'invisible');
+            modalBody.innerHTML = ''; // Clear body
+            modal.dataset.date = '';
+        }
+
+        function showMessage(message, type = 'success') {
+            messageBar.textContent = message;
+            messageBar.classList.remove('hidden', 'bg-green-100', 'text-green-700', 'bg-red-100', 'text-red-700', 'bg-yellow-100', 'text-yellow-700');
+            messageBar.classList.add('animate-pulse-once'); // Trigger animation
+
+            if (type === 'success') {
+                messageBar.classList.add('bg-green-100', 'text-green-800');
+            } else if (type === 'error') {
+                messageBar.classList.add('bg-red-100', 'text-red-800');
+            } else if (type === 'warning') {
+                messageBar.classList.add('bg-yellow-100', 'text-yellow-800');
+            }
+            messageBar.classList.remove('hidden');
+
+            setTimeout(() => {
+                messageBar.classList.add('hidden');
+                messageBar.classList.remove('animate-pulse-once');
+            }, 3000);
+        }
+        
+        // --- Event Listener Registration ---
+
+        function registerEventListeners() {
+            addSubjectForm.addEventListener('submit', handleAddSubject);
+
+            prevMonthBtn.addEventListener('click', () => {
+                currentDate.setMonth(currentDate.getMonth() - 1);
+                renderCalendar();
+            });
+
+            nextMonthBtn.addEventListener('click', () => {
+                currentDate.setMonth(currentDate.getMonth() + 1);
+                renderCalendar();
+            });
+
+            calendarGridContainer.addEventListener('click', (e) => {
+                const dayCell = e.target.closest('.day-cell');
+                if (dayCell && dayCell.dataset.date) {
+                    handleDayClick(dayCell.dataset.date);
+                }
+            });
+
+            subjectListContainer.addEventListener('click', (e) => {
+                const deleteBtn = e.target.closest('.delete-subject-btn');
+                if (deleteBtn) {
+                    const subjectId = deleteBtn.dataset.id;
+                    const subjectName = deleteBtn.dataset.name;
+                    
+                    // CUSTOM MODAL REPLACEMENT - Using prompt() is blocked in the iframe.
+                    // The delete handler will be called directly.
+                    // The handler itself shows a "Deleting..." message.
+                    handleDeleteSubject(subjectId, subjectName);
+
+                    /* // OLD BAD CODE that was removed:
+                    // Simple inline confirmation for this specific action
+                    if (prompt(`Type "DELETE" to confirm deleting subject "${subjectName}" and all its records. This cannot be undone.`) === "DELETE") {
+                        handleDeleteSubject(subjectId, subjectName);
+                    } else {
+                        showMessage("Delete operation Canceled.", "warning");
+                    }
+                    */
+                }
+            });
+
+            modalBody.addEventListener('click', (e) => {
+                const button = e.target.closest('.attendance-btn');
+                if (button) {
+                    const { subjectId, status } = button.dataset;
+                    const dateString = modal.dataset.date;
+                    handleSetAttendance(subjectId, status, dateString);
+                }
+            });
+
+            closeModalBtn.addEventListener('click', hideModal);
+            closeModalBtnFooter.addEventListener('click', hideModal);
+            modal.addEventListener('click', (e) => {
+                // Close if clicking on the background overlay
+                if (e.target.id === 'attendance-modal') {
+                    hideModal();
+                }
+            });
+
+            // CSV Listeners
+            exportCsvBtn.addEventListener('click', handleExportCSV);
+            importCsvBtn.addEventListener('click', handleImportCSV);
+        }
+        
+        // --- App Initialization ---
+
+        window.onload = initializeLocalApp;
+    </script>
+</body>
+</html>
